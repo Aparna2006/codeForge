@@ -1,208 +1,135 @@
-# codeForge - Competitive Coding Platform
+# codeForge
 
-A LeetCode-like competitive programming platform built with Next.js, TypeScript, and Supabase. Solve real-world coding problems, compete globally, and track your progress.
+Full-stack coding platform for problems and contests with async judging, team features, and submission tracking.
 
-## Features
+## Highlights
 
-- **Problem Solving**: Solve coding challenges across multiple difficulty levels
-- **Multi-Language Support**: Write code in Python, JavaScript, TypeScript, C, C++, Java, Go, and R
-- **Real-time Judging**: Instant feedback on your solutions with detailed error messages
-- **Activity Heatmap**: Visualize your coding activity over time
-- **Global Leaderboard**: Compete with thousands of developers worldwide
-- **User Profiles**: Track personal statistics and achievements
-- **Submission History**: View all your past submissions and verdicts
+- Problem solving with Monaco editor and 4 languages (`python`, `c`, `cpp`, `java`)
+- Contest exam mode with one-attempt enforcement and score calculation
+- Persistent submission history for problems and contests
+- Async judging pipeline (Next API -> Judge Service -> Redis queue worker)
+- Teams + invites + team leaderboard
+- In-app notifications (including team invite accept flow)
 
 ## Tech Stack
 
-- **Frontend**: Next.js 16, React 19, TypeScript, Tailwind CSS, shadcn/ui
-- **Database**: Supabase (PostgreSQL)
-- **Authentication**: Supabase Auth
-- **Code Execution**: Node.js child_process with sandboxing
-- **Visualization**: Recharts
+- Frontend/API: Next.js 16, React 19, TypeScript, Tailwind, shadcn/ui
+- Database/Auth: Supabase (Postgres + Supabase Auth)
+- Judge backend: Express + BullMQ + Redis
+- Editor: Monaco (`@monaco-editor/react`)
 
-## Getting Started
+## Monorepo Structure
 
-### Prerequisites
-
-- Node.js 18+ (pnpm recommended)
-- Supabase account and project
-
-### Quick Setup (3 Steps)
-
-1. **Add Environment Variables**
-   
-   In your v0 project, go to **Vars** and add:
-   ```
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-   ```
-   
-   Get these from Supabase → Project Settings → API
-
-2. **Create Database Tables**
-   
-   Visit `http://localhost:3000/setup` and choose:
-   - **Option 1**: Click "Initialize Database" (automatic)
-   - **Option 2**: Copy SQL and paste in Supabase SQL Editor (manual)
-
-3. **Start Coding!**
-   
-   ```bash
-   pnpm dev
-   ```
-   
-   Open [http://localhost:3000](http://localhost:3000) and start solving problems!
-
-### Detailed Setup Guide
-
-See **QUICK_START.md** or **SETUP_INSTRUCTIONS.md** for comprehensive setup instructions.
-
-## Project Structure
-
-```
-/app
-  /auth                    # Authentication pages
-    /signin
-    /signup
-  /api                     # API routes
-    /judge                 # Code judgment API
-    /run                   # Code execution API
-  /problems               # Problems pages
-    /[slug]               # Individual problem page
-  /dashboard              # User dashboard
-  /leaderboard            # Global leaderboard
-  page.tsx                # Home page
-
-/components
-  /ui                     # shadcn/ui components
-  navigation.tsx          # Navigation bar
-  code-editor.tsx         # Code editor component
-  problems-grid.tsx       # Problems listing
-  stats-dashboard.tsx     # Statistics dashboard
-
-/lib
-  supabase.ts             # Supabase client and types
-  auth.ts                 # Authentication utilities
-  utils.ts                # General utilities
-
-/scripts
-  01-init-schema.sql      # Database initialization
-  seed.js                 # Seed sample data
-  setup-db.js             # Database setup helper
+```text
+app/                     Next.js app routes and APIs
+components/              Shared UI components
+lib/                     Shared client/server utilities
+scripts/                 Base schema and setup helpers
+services/judge-service/  Async judge microservice
+supabase/migrations/     Incremental DB migrations
 ```
 
-## Key Features Explained
+## Local Setup
 
-### Code Execution
-- Supports 8 programming languages with proper compilation/execution
-- Sandboxed execution with timeout and memory limits
-- Real-time output and error messages
-
-### Judging System
-- Runs code against hidden test cases
-- Floating-point output tolerance (±0.0001)
-- Detailed verdict reporting (AC, WA, TLE, RE, CE)
-
-### User Statistics
-- Track accepted/total submissions
-- Acceptance rate calculation
-- Difficulty-based problem breakdown
-- Global ranking system
-
-### Activity Heatmap
-- Visualize submission patterns over time
-- Motivation and progress tracking
-- Daily activity counters
-
-## API Endpoints
-
-### `/api/run` (POST)
-Execute code without judging
-```json
-{
-  "code": "string",
-  "language": "python|javascript|typescript|c|cpp|java|go|r",
-  "input": "string"
-}
-```
-
-### `/api/judge` (POST)
-Execute code against problem test cases
-```json
-{
-  "problemId": "uuid",
-  "code": "string",
-  "language": "string",
-  "testInput": "string"
-}
-```
-
-## Database Schema
-
-### Tables
-- **users**: User profiles and basic information
-- **problems**: Coding problems with test cases
-- **submissions**: User code submissions and verdicts
-- **activity**: Daily submission activity tracking
-- **user_stats**: Aggregated user statistics and rankings
-
-## Supported Languages
-
-| Language   | Template | Compilation | Execution |
-|-----------|----------|-------------|-----------|
-| Python    | ✓        | No          | python3   |
-| JavaScript| ✓        | No          | node      |
-| TypeScript| ✓        | tsc         | node      |
-| C         | ✓        | gcc         | ./binary  |
-| C++       | ✓        | g++         | ./binary  |
-| Java      | ✓        | javac       | java      |
-| Go        | ✓        | go build    | ./binary  |
-| R         | ✓        | No          | Rscript   |
-
-## Deployment
-
-### Deploy to Vercel
-
-1. Push your code to GitHub
-2. Connect your repository to Vercel
-3. Add environment variables in Vercel dashboard
-4. Deploy!
+### 1) Install deps
 
 ```bash
-vercel --prod
+npm install
+npm run judge-service:install
 ```
 
-## Performance Considerations
+### 2) Configure environment
 
-- **Code Execution**: Runs locally on Next.js server (suitable for MVP; consider isolated sandbox for production)
-- **Database**: Indexed queries for fast problem/user lookups
-- **Caching**: Recharts memoization for dashboard charts
+Create `.env.local` from `.env.example` and fill values.
 
-## Future Enhancements
+### 3) Run database SQL
 
-- [ ] Real-time collaboration/pair programming
-- [ ] Discussion forums and editorials
-- [ ] AI-powered hints system
-- [ ] Mobile app
-- [ ] Problem difficulty rating system
-- [ ] Social features (followers, messaging)
-- [ ] Contests and tournaments
-- [ ] Premium features and premium problems
+Run these in Supabase SQL Editor (in order):
+
+1. `scripts/01-init-schema.sql`
+2. `supabase/migrations/004_async_judge_columns.sql`
+3. `supabase/migrations/005_phase3_teams_notifications.sql`
+
+### 4) Start services
+
+Terminal 1 (judge service):
+
+```bash
+npm run judge-service:dev
+```
+
+Terminal 2 (next app):
+
+```bash
+npm run dev
+```
+
+App: `http://localhost:3000`
+
+## Production Deployment (Recommended)
+
+Order:
+
+1. Supabase (schema + auth URLs)
+2. Judge service on Render
+3. Next app on Vercel
+
+### Supabase Auth URLs
+
+- Site URL: your Vercel app URL
+- Redirect URLs:
+  - `https://<your-domain>/auth/forgot-password`
+  - `https://<your-domain>/auth/reset-password`
+
+### Render (judge service)
+
+- Root directory: `services/judge-service`
+- Build: `npm install`
+- Start: `npm start`
+- Required env:
+  - `REDIS_URL`
+  - `JUDGE_JWT_SECRET`
+  - `JUDGE_SERVICE_API_TOKEN`
+  - `JUDGE_CORS_ORIGIN=https://<your-vercel-domain>`
+  - `JUDGE_SERVICE_PUBLIC_BASE_URL=https://<your-render-service>`
+
+### Vercel (next app)
+
+- Required env:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `ADMIN_EMAILS`
+  - `JUDGE_ASYNC_ENABLED=true`
+  - `JUDGE_SERVICE_URL=https://<your-render-service>`
+  - `JUDGE_SERVICE_API_TOKEN=<same-as-render>`
+
+## NPM Scripts
+
+- `npm run dev` - Start Next dev server
+- `npm run build` - Production build
+- `npm run start` - Run production Next server
+- `npm run judge-service:install` - Install judge service dependencies
+- `npm run judge-service:dev` - Run judge service in dev mode
+
+## Verification Checklist
+
+- Auth: sign up, sign in, forgot password, reset password
+- Problems: run + submit, submissions visible
+- Contests: start/end attempt, contest submissions and scoring
+- Teams: create team, invite, accept invite from notifications
+- Async judge: submission status polling and report link
+
+## Security Notes
+
+- Never commit `.env.local` or service secrets.
+- Keep `JUDGE_SERVICE_API_TOKEN` server-side only.
+- Prefer `JUDGE_RUNNER_MODE=docker` in production when container runner is available.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+See `CONTRIBUTING.md`.
 
 ## License
 
-MIT License - feel free to use this project for learning and personal projects.
+MIT - see `LICENSE`.
 
-## Support
-
-For issues, questions, or suggestions, please open an GitHub issue or contact the maintainers.
-
----
-
-**Happy coding! 🚀**
-
-Built with ❤️ using codeForge
