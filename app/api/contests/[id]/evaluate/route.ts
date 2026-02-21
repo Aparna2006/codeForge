@@ -6,6 +6,10 @@ import * as path from 'path';
 import { hasSupabaseEnv, supabase } from '@/lib/supabase';
 import { contestProblems, mockContests } from '@/lib/mock-data';
 
+const JUDGE_ASYNC_ENABLED = process.env.JUDGE_ASYNC_ENABLED === 'true';
+const JUDGE_SERVICE_URL = process.env.JUDGE_SERVICE_URL || 'http://localhost:4100';
+const JUDGE_SERVICE_API_TOKEN = process.env.JUDGE_SERVICE_API_TOKEN || '';
+
 type Verdict = 'AC' | 'WA' | 'RE' | 'CE' | 'TLE';
 
 type TestCase = {
@@ -22,6 +26,21 @@ type JudgeCaseResult = {
   actual?: string;
   error?: string;
   runtimeMs: number;
+};
+
+type JudgeServiceReturn = {
+  verdict?: string;
+  runtimeMs?: number;
+  passedCount?: number;
+  totalCount?: number;
+  output?: string;
+  message?: string;
+  details?: {
+    testCaseIndex?: number;
+    expectedOutput?: string;
+    actualOutput?: string;
+    errorMessage?: string;
+  };
 };
 
 const LANGUAGE_EXTENSIONS: Record<string, string> = {
@@ -124,6 +143,76 @@ function getErrorText(err: any): string {
   if (err?.stderr) return err.stderr.toString().trim();
   if (err?.stdout) return err.stdout.toString().trim();
   return `${err?.message ?? 'Execution failed'}`.trim();
+}
+
+function mapJudgeServiceVerdict(verdict: string): Verdict {
+  const normalized = String(verdict || '').toLowerCase();
+  if (normalized === 'accepted') return 'AC';
+  if (normalized === 'wrong answer') return 'WA';
+  if (normalized === 'runtime error') return 'RE';
+  if (normalized === 'compilation error') return 'CE';
+  if (normalized === 'time limit exceeded') return 'TLE';
+  return 'RE';
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runJudgeViaService(payload: {
+  code: string;
+  language: string;
+  testCases: TestCase[];
+  userEmail: string;
+  contestId: string;
+  questionId: string;
+}) {
+  const enqueueResp = await fetch(`${JUDGE_SERVICE_URL}/api/v1/judge/jobs`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(JUDGE_SERVICE_API_TOKEN ? { 'x-judge-service-token': JUDGE_SERVICE_API_TOKEN } : {}),
+    },
+    body: JSON.stringify({
+      code: payload.code,
+      language: payload.language,
+      testCases: payload.testCases.map((tc) => ({ input: tc.input || '', output: tc.output || '' })),
+      timeLimitMs: 3000,
+      memoryLimitMb: 256,
+      meta: {
+        userEmail: payload.userEmail,
+        contestId: payload.contestId,
+        questionId: payload.questionId,
+      },
+    }),
+  });
+  const enqueueJson = await enqueueResp.json().catch(() => ({}));
+  if (!enqueueResp.ok || !enqueueJson?.success || !enqueueJson?.jobId) {
+    throw new Error(enqueueJson?.message || 'Failed to enqueue contest judge job');
+  }
+
+  const jobId = String(enqueueJson.jobId);
+  const timeoutAt = Date.now() + 60_000;
+  while (Date.now() < timeoutAt) {
+    await sleep(400);
+    const statusResp = await fetch(`${JUDGE_SERVICE_URL}/api/v1/judge/jobs/${encodeURIComponent(jobId)}`, {
+      headers: {
+        ...(JUDGE_SERVICE_API_TOKEN ? { 'x-judge-service-token': JUDGE_SERVICE_API_TOKEN } : {}),
+      },
+    });
+    const statusJson = await statusResp.json().catch(() => ({}));
+    if (!statusResp.ok || !statusJson?.success) {
+      continue;
+    }
+    const state = String(statusJson?.job?.state || '');
+    if (state === 'completed') {
+      return statusJson.job.returnvalue as JudgeServiceReturn;
+    }
+    if (state === 'failed') {
+      throw new Error(statusJson?.job?.failedReason || 'Judge job failed');
+    }
+  }
+  throw new Error('Judge timeout. Please retry.');
 }
 
 async function resolveContestId(
@@ -427,6 +516,127 @@ export async function POST(
     const questionResp = await getQuestionWithTests(contestId, questionId);
     if (!questionResp.ok || !questionResp.testCases || questionResp.testCases.length === 0) {
       return NextResponse.json({ success: false, message: questionResp.message || 'Question not found.' }, { status: 404 });
+    }
+
+    if (JUDGE_ASYNC_ENABLED) {
+      const judged = await runJudgeViaService({
+        code,
+        language,
+        testCases: questionResp.testCases,
+        userEmail,
+        contestId,
+        questionId,
+      });
+
+      const finalVerdict = mapJudgeServiceVerdict(judged.verdict || '');
+      const totalRuntime = Number(judged.runtimeMs ?? 0);
+      const passedCount = Number(judged.passedCount ?? 0);
+      const totalCount = Number(judged.totalCount ?? questionResp.testCases.length);
+      const failedIndex = Number(judged?.details?.testCaseIndex ?? -1);
+      const results: JudgeCaseResult[] = questionResp.testCases.map((tc, idx) => {
+        const verdict: Verdict =
+          finalVerdict === 'AC'
+            ? 'AC'
+            : idx < passedCount
+              ? 'AC'
+              : idx === failedIndex
+                ? finalVerdict
+                : finalVerdict;
+        return {
+          index: idx + 1,
+          hidden: !!tc.hidden,
+          verdict,
+          expected: tc.hidden ? undefined : tc.output ?? '',
+          actual:
+            idx === failedIndex
+              ? judged?.details?.actualOutput || judged?.output || ''
+              : undefined,
+          error:
+            idx === failedIndex && (finalVerdict === 'RE' || finalVerdict === 'CE' || finalVerdict === 'TLE')
+              ? judged?.details?.errorMessage || judged?.output || ''
+              : undefined,
+          runtimeMs: idx === failedIndex ? totalRuntime : 0,
+        };
+      });
+
+      let score = 0;
+      if (finalVerdict === 'AC') {
+        score = 5;
+      }
+
+      let scoreSummary: {
+        totalScore: number;
+        totalPossibleScore: number;
+        solvedCount: number;
+        rank: number | null;
+        participants: number;
+      } | null = null;
+      let persistenceWarning = '';
+
+      if (mode === 'submit' && !isVirtualMode) {
+        if (!attempt) {
+          const { error: startError } = await supabase.from('contest_attempts').insert({
+            contest_id: contestId,
+            user_email: userEmail,
+            status: 'in_progress',
+            started_at: new Date().toISOString(),
+          });
+          if (startError) {
+            if (isMissingAttemptsTableError(startError.message || '')) {
+              return NextResponse.json(
+                { success: false, message: "Table 'contest_attempts' is missing. Run contests schema SQL." },
+                { status: 500 }
+              );
+            }
+            return NextResponse.json({ success: false, message: startError.message }, { status: 500 });
+          }
+        }
+
+        const details = results.map((r) => ({
+          index: r.index,
+          hidden: r.hidden,
+          verdict: r.verdict,
+          runtimeMs: r.runtimeMs,
+        }));
+        const { error: insertError } = await supabase.from('contest_submissions').insert({
+          contest_id: contestId,
+          question_id: questionId,
+          question_title: questionResp.questionTitle ?? null,
+          user_email: userEmail,
+          language,
+          verdict: finalVerdict,
+          score,
+          runtime_ms: totalRuntime,
+          passed_count: results.filter((r) => r.verdict === 'AC').length,
+          total_count: results.length,
+          details,
+        });
+        if (insertError) {
+          const msg = insertError.message || '';
+          const lower = msg.toLowerCase();
+          const missingTable =
+            lower.includes('contest_submissions') &&
+            (lower.includes('not found') || lower.includes('does not exist') || lower.includes('schema cache'));
+          if (!missingTable) {
+            return NextResponse.json({ success: false, message: msg }, { status: 500 });
+          }
+          persistenceWarning =
+            "Submission accepted, but contest score couldn't be saved because 'contest_submissions' table is missing.";
+        } else {
+          scoreSummary = await computeScoreboard(contestId, userEmail);
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        verdict: finalVerdict,
+        passedAll: finalVerdict === 'AC',
+        runtimeMs: totalRuntime,
+        score,
+        results,
+        scoreSummary,
+        persistenceWarning: persistenceWarning || undefined,
+      });
     }
 
     const dependencies = LANGUAGE_RUNTIME_DEPENDENCIES[language] || [];
