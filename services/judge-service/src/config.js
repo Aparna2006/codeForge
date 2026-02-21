@@ -1,4 +1,5 @@
 const DEFAULT_PORT = 4100;
+const resolvedPort = Number(process.env.PORT || process.env.JUDGE_SERVICE_PORT || DEFAULT_PORT);
 
 function parseJson(value, fallback) {
   try {
@@ -19,8 +20,8 @@ const defaultUsers = [
 ];
 
 module.exports = {
-  port: Number(process.env.JUDGE_SERVICE_PORT || DEFAULT_PORT),
-  publicBaseUrl: process.env.JUDGE_SERVICE_PUBLIC_BASE_URL || `http://localhost:${Number(process.env.JUDGE_SERVICE_PORT || DEFAULT_PORT)}`,
+  port: resolvedPort,
+  publicBaseUrl: process.env.JUDGE_SERVICE_PUBLIC_BASE_URL || `http://localhost:${resolvedPort}`,
   corsOrigin: process.env.JUDGE_CORS_ORIGIN || '*',
   jwtSecret: process.env.JUDGE_JWT_SECRET || 'dev-judge-secret-change-in-prod',
   apiToken: process.env.JUDGE_SERVICE_API_TOKEN || '',
