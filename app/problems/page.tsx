@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -63,12 +63,18 @@ export default function ProblemsPage() {
     const load = async () => {
       try {
         if (!hasSupabaseEnv) throw new Error('Supabase is not configured');
-        const { data, error } = await supabase
-          .from('problems')
-          .select('id,slug,title,category,difficulty,accepted_count,submission_count')
-          .order('created_at', { ascending: true });
-        if (error) throw error;
-        setProblems((data || []).map(mapFromDb));
+
+        await fetch('/api/problems/bootstrap', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force: false }),
+        }).catch(() => null);
+
+        const res = await fetch('/api/problems', { cache: 'no-store' });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.message || 'Failed to load problems');
+
+        setProblems((json.problems || []).map(mapFromDb));
       } catch (_err) {
         setProblems(mockProblems.map(mapFromMock));
         setWarning('Using local mock problems. Configure Supabase for persistent data.');
@@ -277,3 +283,4 @@ export default function ProblemsPage() {
     </div>
   );
 }
+

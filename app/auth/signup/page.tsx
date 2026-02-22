@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { FormEvent, useState } from 'react'
 import Link from 'next/link'
@@ -50,6 +50,11 @@ export default function SignUpPage() {
       setLoading(false)
       return
     }
+    await fetch('/api/auth/activity-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'signup', email: email.trim() }),
+    }).catch(() => null)
 
     router.replace('/auth/signin')
   }
@@ -154,3 +159,5 @@ export default function SignUpPage() {
     </div>
   )
 }
+
+

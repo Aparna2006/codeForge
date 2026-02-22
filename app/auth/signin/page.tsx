@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { FormEvent, useState } from 'react'
 import Link from 'next/link'
@@ -37,6 +37,12 @@ export default function SignInPage() {
       setLoading(false)
       return
     }
+
+    await fetch('/api/auth/activity-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'signin', email: email.trim() }),
+    }).catch(() => null)
 
     const next = searchParams.get('next')
     router.replace(next && next.startsWith('/') ? next : '/dashboard')
@@ -122,3 +128,5 @@ export default function SignInPage() {
     </div>
   )
 }
+
+

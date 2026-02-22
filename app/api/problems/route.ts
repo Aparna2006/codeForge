@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { hasSupabaseEnv, supabase } from '@/lib/supabase';
 import { requireAdmin } from '@/lib/admin-server';
 
@@ -12,7 +12,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from('problems')
-    .select('id,slug,title,category,difficulty,constraints,time_limit_ms,memory_limit_mb,created_at')
+    .select('id,slug,title,category,difficulty,constraints,time_limit_ms,memory_limit_mb,accepted_count,submission_count,created_at')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -104,3 +104,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, message: error?.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+
