@@ -84,10 +84,33 @@ export async function signUp(
   }
 }
 
-export async function signIn(email: string, password: string) {
+export async function signIn(identifier: string, password: string) {
   try {
+    const normalizedIdentifier = identifier.trim().toLowerCase();
+    let emailToUse = normalizedIdentifier;
+
+    // Allow login with username by resolving it to the account email first.
+    if (!normalizedIdentifier.includes('@')) {
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('email')
+        .ilike('username', normalizedIdentifier)
+        .limit(1)
+        .maybeSingle();
+
+      if (profileError) {
+        console.warn('[v0] Username lookup failed:', profileError.message);
+      }
+
+      if (!profile?.email) {
+        return { success: false, error: 'Invalid login credentials' };
+      }
+
+      emailToUse = String(profile.email).trim().toLowerCase();
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: emailToUse,
       password,
     });
 

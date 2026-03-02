@@ -110,6 +110,9 @@ export default function DashboardPage() {
             <Link href="/leaderboard">
               <Button variant="outline">Leaderboard</Button>
             </Link>
+            <Link href="/profile">
+              <Button variant="outline">Profile</Button>
+            </Link>
             <SignOutButton />
           </div>
         </div>

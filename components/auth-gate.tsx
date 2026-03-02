@@ -31,7 +31,14 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     const syncSession = async () => {
       const {
         data: { session },
+        error,
       } = await supabase.auth.getSession()
+
+      if (error && error.message.toLowerCase().includes('refresh token')) {
+        // Recover from stale local auth state (expired/removed refresh token).
+        await supabase.auth.signOut()
+      }
+
       if (!mounted) return
       setAuthenticated(Boolean(session))
       setReady(true)

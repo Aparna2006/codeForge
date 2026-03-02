@@ -14,7 +14,7 @@ import { signIn } from '@/lib/auth'
 export default function SignInPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -24,13 +24,13 @@ export default function SignInPage() {
     setLoading(true)
     setError('')
 
-    if (!email || !password) {
-      setError('Enter both email and password.')
+    if (!identifier || !password) {
+      setError('Enter both email or username and password.')
       setLoading(false)
       return
     }
 
-    const result = await signIn(email.trim(), password)
+    const result = await signIn(identifier.trim(), password)
     if (!result.success) {
       const normalized = normalizeAuthError(result.error)
       setError(normalized.message)
@@ -41,7 +41,7 @@ export default function SignInPage() {
     await fetch('/api/auth/activity-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'signin', email: email.trim() }),
+      body: JSON.stringify({ type: 'signin', email: result.user?.email || '' }),
     }).catch(() => null)
 
     const next = searchParams.get('next')
@@ -79,13 +79,13 @@ export default function SignInPage() {
               ) : null}
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Email or Username</label>
                 <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  autoComplete="email"
+                  type="text"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="Email or username"
+                  autoComplete="username"
                   disabled={loading}
                   className="border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-white/5"
                 />
